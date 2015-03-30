@@ -13,7 +13,7 @@ import net.vicp.lylab.core.Executor;
  * 
  * @author Young Lee
  * @since 2015.03.17
- * @version 1.0.0
+ * @version 1.0.1
  * 
  */
 public final class LYTaskQueue extends Thread implements Runnable{
@@ -34,13 +34,24 @@ public final class LYTaskQueue extends Thread implements Runnable{
 	/**
 	 * At your service!
 	 * @param
-	 * task the task which should be executed
+	 * task which should be executed, it will be cloned and its clone will be enqueued.
+	 * <br>[!]Original parameter 'task' will never be used or changed by LYTaskQueue.addTask(Task task)
 	 * @return
-	 * taskId used to recognise specific task.
+	 * A taskId used to recognise specific task.
+	 * 
 	 */
 	public static Integer addTask(Task task)
 	{
 		if(task == null)
+			return null;
+		Task task0 = null;
+		try {
+			task0 = (Task) task.clone();
+		} catch (CloneNotSupportedException e) {
+			e.printStackTrace();
+			return null;
+		}
+		if(task0 == null)
 			return null;
 		synchronized (tqs) {
 			while (true) {
@@ -55,8 +66,8 @@ public final class LYTaskQueue extends Thread implements Runnable{
 				}
 				if (size <= maxQueue && size >= 0) {
 					synchronized (lastTaskId) {
-						task.setTaskId(lastTaskId++);
-						tqs.offer(task);
+						task0.setTaskId(lastTaskId++);
+							tqs.offer(task0);
 					}
 					break;
 				}
@@ -67,25 +78,33 @@ public final class LYTaskQueue extends Thread implements Runnable{
 			isRunning = true;
 			new LYTaskQueue().start();
 		}
-		return task.getTaskId();
+		return task0.getTaskId();
 	}
 
 	/**
-	 * Use this to cancel this task.
-	 * <br><tt>[HINT]</tt> If you own the 'task', you may also cancel you task by invoking task.cancel()
+	 * Cancel a task.
 	 * @param
-	 * taskId the taskId which you will get from LYTaskQueue.addTask()
+	 * taskId which you will get from LYTaskQueue.addTask()
 	 * @return
 	 * true: cancelled<br>false: cancel failed
 	 */
-	public static Boolean cancel(Integer taskId) throws Exception {
+	public static Boolean cancel(Integer taskId) {
+		if(taskId == null || taskId < 0)
+			return false;
 		synchronized (tqs) {
 			if(lastTaskId < taskId)
 				return false;
 			try{
 				for(Executor tk: ((LinkedList<Executor>) tqs))
 					if(taskId.equals(((Task) tk).getTaskId()))
-						return ((Task) tk).cancel();
+					{
+						synchronized (((Task) tk).getState()) {
+							if (((Task) tk).getState() != Task.BEGAN)
+								return false;
+							((Task) tk).setState(Task.CANCELLED);
+							return true;
+						}
+					}
 			} catch(Exception e) {
 				System.out.println("tqs.size():" + tqs.size() + "\tlastTaskId:" + lastTaskId + "\ttaskId:" + taskId);
 				e.printStackTrace();

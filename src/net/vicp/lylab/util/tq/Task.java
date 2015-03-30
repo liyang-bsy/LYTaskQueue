@@ -10,28 +10,34 @@ import net.vicp.lylab.core.Executor;
  * 
  * @author Young Lee
  * @since 2015.03.17
- * @version 1.0.0
+ * @version 1.0.1
  * 
  */
-public abstract class Task implements Runnable, Executor {
+public abstract class Task implements Runnable, Executor, Cloneable {
 
 	private Integer taskId;
 	private Integer state = BEGAN;
 
 	static public final Integer FAILED = -1;
 	static public final Integer BEGAN = 0;
-	static public final Integer EXECUTED = 1;
+	static public final Integer STARTED = 1;
 	static public final Integer COMPLETED = 2;
 	static public final Integer CANCELLED = 3;
+
+	public Object clone() throws CloneNotSupportedException {
+		return super.clone();
+	}
 
 	/**
 	 * Reserved entrance for multi-threaded. DO NOT call this method.
 	 */
 	public final void run()
 	{
-		if(getState() != BEGAN)
-			return;
-		setState(EXECUTED);
+		synchronized (getState()) {
+			if(getState() != BEGAN)
+				return;
+			setState(STARTED);
+		}
 		try {
 			exec();
 			setState(COMPLETED);
@@ -46,30 +52,27 @@ public abstract class Task implements Runnable, Executor {
 		synchronized (this) {
 			this.notifyAll();
 		}
+		aftermath();
 	}
-
+	
 	/**
-	 * Call it to cancel this task.
-	 * @return
-	 * true: cancelled<br>false: cancel failed
+	 * If you need do something when this task completed, override this.<br>
+	 * It will execute unless this task was successfully CANCELLED
 	 */
-	public final Boolean cancel() {
-		synchronized (getState()) {
-			if (getState() != BEGAN)
-				return false;
-			setState(CANCELLED);
-			return true;
-		}
+	public void aftermath()
+	{
+		return;
 	}
 
 	/**
 	 * Alert! This function will block current thread!
-	 * But the task will finish if this function is completed.
+	 * The task is finished when this function is completed.
+	 * DO NOT use it with aftermath()
 	 */
 	public final void waitingForFinish() {
 		synchronized (this)
 		{
-			while(getState() == BEGAN || getState() == EXECUTED)
+			while(getState() == BEGAN || getState() == STARTED)
 			{
 				try {
 					this.wait();
