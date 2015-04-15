@@ -19,28 +19,34 @@ import net.vicp.lylab.core.Executor;
 public final class LYTaskQueue extends Thread implements Runnable{
 
 	private volatile static Queue<Executor> tqs = new LinkedList<Executor>();
-	public volatile static Boolean isRunning = false;
+	private volatile static Boolean isRunning = false;
+	private volatile static Integer _tc = 1;
 
-	private static Integer lastTaskId = 0;
+	private static Long lastTaskId = 0L;
 	private static Integer maxQueue = 1000;
 	private static Integer maxThread = 200;
 
-	/**
+	/*
+	 * Default is 1 second.
+	 */
+	private static Long waitingThreshold = 500L;
+	
+	/*
 	 * Reserved entrance for multi-threaded. DO NOT call this method.
 	 */
 	@Override
-	public void run() { execute(); }
+	public final void run() { execute(); }
 
 	/**
 	 * At your service!
 	 * @param
 	 * task which should be executed, it will be cloned and its clone will be enqueued.
-	 * <br>[!]Original parameter 'task' will never be used or changed by LYTaskQueue.addTask(Task task)
+	 * <br>[!] Original parameter 'task' will never be used or changed by LYTaskQueue.addTask(Task task)
 	 * @return
 	 * A taskId used to recognise specific task.
 	 * 
 	 */
-	public static Integer addTask(Task task)
+	public static Long addTask(Task task)
 	{
 		if(task == null)
 			return null;
@@ -58,7 +64,7 @@ public final class LYTaskQueue extends Thread implements Runnable{
 				Integer size = tqs.size();
 				if (size >= maxQueue) {
 					try {
-						tqs.wait();
+						tqs.wait(waitingThreshold);
 						continue;// 继续执行等待中的检入任务。
 					} catch (InterruptedException e) {
 						e.printStackTrace();
@@ -66,6 +72,7 @@ public final class LYTaskQueue extends Thread implements Runnable{
 				}
 				if (size <= maxQueue && size >= 0) {
 					synchronized (lastTaskId) {
+						if(size == 0) lastTaskId = 0L;
 						task0.setTaskId(lastTaskId++);
 							tqs.offer(task0);
 					}
@@ -88,7 +95,7 @@ public final class LYTaskQueue extends Thread implements Runnable{
 	 * @return
 	 * true: cancelled<br>false: cancel failed
 	 */
-	public static Boolean cancel(Integer taskId) {
+	public static Boolean cancel(Long taskId) {
 		if(taskId == null || taskId < 0)
 			return false;
 		synchronized (tqs) {
@@ -113,6 +120,7 @@ public final class LYTaskQueue extends Thread implements Runnable{
 		return false;
 	}
 
+	
 	private static void execute()
 	{
 		while(tqs.peek() != null)
@@ -120,11 +128,11 @@ public final class LYTaskQueue extends Thread implements Runnable{
 			Task task = (Task) tqs.poll();
 			while(task.getState() == Task.BEGAN)
 			{
-				if(LYTaskQueue.activeCount() > maxThread)
-				{
-					synchronized (isRunning) {
+				synchronized (_tc) {
+					if(_tc >= maxThread)
+					{
 						try {
-							isRunning.wait();
+							_tc.wait(waitingThreshold);
 							continue;
 						} catch (InterruptedException e) {
 							e.printStackTrace();
@@ -135,11 +143,22 @@ public final class LYTaskQueue extends Thread implements Runnable{
 				synchronized (tqs) {
 					tqs.notifyAll();
 				}
+				break;
 			}
 		}
 		isRunning = false;
 	}
-
+	
+	public static void _inc() { synchronized(_tc) { _tc++; } }
+	
+	public static void _dec() { synchronized(_tc) { 
+		try {
+			_tc.notifyAll();
+		} catch (Exception e) { e.printStackTrace(); }
+		_tc--;
+		}
+	}
+	
 	public static Integer getMaxQueue() {
 		return maxQueue;
 	}
@@ -156,4 +175,31 @@ public final class LYTaskQueue extends Thread implements Runnable{
 		LYTaskQueue.maxThread = maxThread;
 	}
 
+	public static Long getWaitingThreshold() {
+		return waitingThreshold;
+	}
+
+	/**
+	 * Default is 1 second.
+	 */
+	public static void setWaitingThreshold(Long waitingThreshold) {
+		LYTaskQueue.waitingThreshold = waitingThreshold;
+	}
+
+	public static Queue<Executor> getTqs() {
+		return tqs;
+	}
+
+	public static Long getLastTaskId() {
+		return lastTaskId;
+	}
+
+	/**
+	 * [!] Not real-time
+	 * @return a number indicates running threads
+	 */
+	public static Integer getThreadCount() {
+		return _tc;
+	}
+	
 }

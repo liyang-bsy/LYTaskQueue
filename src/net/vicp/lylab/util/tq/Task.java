@@ -15,7 +15,7 @@ import net.vicp.lylab.core.Executor;
  */
 public abstract class Task implements Runnable, Executor, Cloneable {
 
-	private Integer taskId;
+	private Long taskId;
 	private Integer state = BEGAN;
 
 	static public final Integer FAILED = -1;
@@ -38,6 +38,7 @@ public abstract class Task implements Runnable, Executor, Cloneable {
 				return;
 			setState(STARTED);
 		}
+		LYTaskQueue._inc();
 		try {
 			exec();
 			setState(COMPLETED);
@@ -46,13 +47,15 @@ public abstract class Task implements Runnable, Executor, Cloneable {
 			setState(FAILED);
 		}
 
-		synchronized (LYTaskQueue.isRunning) {
-			LYTaskQueue.isRunning.notifyAll();
-		}
 		synchronized (this) {
 			this.notifyAll();
 		}
-		aftermath();
+		try {
+			aftermath();
+		} catch (Throwable e) {
+			e.printStackTrace();
+		}
+		LYTaskQueue._dec();
 	}
 	
 	/**
@@ -75,7 +78,7 @@ public abstract class Task implements Runnable, Executor, Cloneable {
 			while(getState() == BEGAN || getState() == STARTED)
 			{
 				try {
-					this.wait();
+					this.wait(LYTaskQueue.getWaitingThreshold());
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -83,11 +86,11 @@ public abstract class Task implements Runnable, Executor, Cloneable {
 		}
 	}
 	
-	public final Integer getTaskId() {
+	public final Long getTaskId() {
 		return taskId;
 	}
 
-	public final Task setTaskId(Integer taskId) {
+	public final Task setTaskId(Long taskId) {
 		this.taskId = taskId;
 		return this;
 	}
