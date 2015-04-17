@@ -1,6 +1,6 @@
 package test.net.vicp.lylab.util.tq;
 
-import net.vicp.lylab.util.tq.LYTaskQueue;
+import net.vicp.lylab.utils.tq.LYTaskQueue;
 
 public class TQTest {
 	

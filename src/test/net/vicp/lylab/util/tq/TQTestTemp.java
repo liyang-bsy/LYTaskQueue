@@ -2,7 +2,7 @@ package test.net.vicp.lylab.util.tq;
 
 import java.util.Random;
 
-import net.vicp.lylab.util.tq.Task;
+import net.vicp.lylab.utils.tq.Task;
 
 public class TQTestTemp extends Task{
 	@Override

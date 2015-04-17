@@ -1,4 +1,4 @@
-package net.vicp.lylab.util.tq;
+package net.vicp.lylab.utils.tq;
 
 import net.vicp.lylab.core.Executor;
 
